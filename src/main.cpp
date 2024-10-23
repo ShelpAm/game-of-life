@@ -1,7 +1,6 @@
 #include <chrono>
 #include <fast_io.h>
 #include <random>
-#include <sstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -14,6 +13,16 @@ struct Settings {
   std::size_t off_minimum;
   std::size_t off_maximum;
 };
+
+namespace fast_io::io {
+void scan(fast_io::ibuffer_view &ibf, Settings &settings)
+{
+  scan(ibf, settings.fps);
+  // scan(ibf, settings.live_probability);
+  scan(ibf, settings.on_minimum, settings.on_maximum);
+  scan(ibf, settings.off_minimum, settings.off_maximum);
+}
+} // namespace fast_io::io
 
 // With probability of p to be true.
 auto gen_bool(double p) -> bool
@@ -52,37 +61,24 @@ auto main(int argc, char **argv) -> int
   auto *const state_filename{argv_s[1]};
   fast_io::native_file_loader file_data{os_c_str(state_filename)};
 
-  std::string content{file_data.begin(), file_data.end()};
-  std::stringstream ifs{content};
-
-  // std::ifstream ifs{state_filename};
-  // if (!ifs) {
-  //   println("Error opening file: {}", os_c_str(state_filename));
-  //   return 1;
-  // }
+  fast_io::ibuffer_view ibf{file_data};
 
   std::size_t n;
   std::size_t m;
-  ifs >> n >> m;
+  scan(ibf, n, m);
 
   Settings settings{};
-  ifs >> settings.fps;
-  ifs >> settings.live_probability;
-  ifs >> settings.on_minimum >> settings.on_maximum;
-  ifs >> settings.off_minimum >> settings.off_maximum;
+  scan(ibf, settings);
 
-  ifs.ignore();
   std::vector<std::string> state(n, std::string(m, '.'));
 
   std::vector<std::string> initial_state;
   std::string buf;
-  while (std::getline(ifs, buf)) {
+  while (scan<true>(ibf, buf)) {
     initial_state.push_back(buf);
   }
   auto const width{initial_state[0].size()};
   auto const height{initial_state.size()};
-
-  println(width, height);
 
   // Initialize the state.
   auto const off_x{(n - height) / 2};
@@ -93,19 +89,10 @@ auto main(int argc, char **argv) -> int
     }
   }
 
-  // for (auto &lines : state) {
-  //   for (auto &element : lines) {
-  //     element = gen_bool(0.7) ? 'o' : '.';
-  //   }
-  // }
-
   using namespace std::chrono_literals;
   auto const wait_time{1000ms / settings.fps};
-  auto last{std::chrono::steady_clock::now()};
+  auto last_start_point{std::chrono::steady_clock::now()};
   while (true) {
-    std::this_thread::sleep_until(last + wait_time);
-    last = std::chrono::steady_clock::now();
-
     // Render
     for (auto const &e : state) {
       for (auto const f : e) {
@@ -113,6 +100,7 @@ auto main(int argc, char **argv) -> int
       }
       println("");
     }
+    println("");
 
     // Update
     auto count_surrounding{[](auto const &state, std::size_t x, std::size_t y) {
@@ -146,5 +134,8 @@ auto main(int argc, char **argv) -> int
       }
     }
     state = std::move(next_state);
+
+    std::this_thread::sleep_until(last_start_point + wait_time);
+    last_start_point = std::chrono::steady_clock::now();
   }
 }
