@@ -8,6 +8,18 @@
 #include <thread>
 #include <vector>
 
+volatile std::atomic_bool signaled{};
+
+void signal_handler(int /*sig*/)
+{
+  using fast_io::mnp::chvw;
+  // Shows the cursor.
+  fast_io::print(fast_io::out(), chvw(0x1B), chvw(0x5B), chvw('?'), 25,
+                 chvw('h'));
+
+  signaled = true;
+}
+
 struct Settings {
   std::size_t n, m; // Size of the game map.
   std::size_t fps;
@@ -137,6 +149,9 @@ void update(state_t &state, Settings const &s)
 auto main(int argc, char **argv) -> int
 {
   using namespace std::chrono_literals;
+  using fast_io::mnp::chvw;
+
+  signal(SIGINT, signal_handler);
 
   if (argc == 0) {
     return 1;
@@ -153,11 +168,17 @@ auto main(int argc, char **argv) -> int
 
   fast_io::span argv_s{argv, static_cast<std::size_t>(argc)};
 
+  // Clears the screen.
+  fast_io::print(fast_io::out(), chvw(0x1B), chvw(0x5B), 128, chvw('T'));
+  // Hides the cursor.
+  fast_io::print(fast_io::out(), chvw(0x1B), chvw(0x5B), chvw('?'), 25,
+                 chvw('l'));
+
   auto [settings, state]{read_config(argv_s[1])};
 
   auto const wait_time{1000ms / settings.fps};
   auto last_start_point{std::chrono::steady_clock::now()};
-  while (true) {
+  while (!signaled) {
     render(state);
     update(state, settings);
 
