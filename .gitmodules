@@ -1,0 +1,4 @@
+[submodule "third-party/fast_io"]
+	path = third-party/fast_io
+	url = https://github.com/cppfastio/fast_io.git
+	branch = next
