@@ -101,6 +101,10 @@ auto count_surrounding(state_t const &state, std::size_t x, std::size_t y)
 
 void render(state_t const &state)
 {
+  using fast_io::mnp::chvw;
+  fast_io::print(fast_io::out(), chvw(0x1B), chvw(0x5B), 1, chvw(';'), 1,
+                 chvw('H'));
+
   fast_io::string buffer;
   for (auto const &line : state) {
     for (auto const column : line) {
