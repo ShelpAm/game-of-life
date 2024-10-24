@@ -1,6 +1,7 @@
 #include <chrono>
 #include <fast_io.h>
 #include <fast_io_dsal/span.h>
+#include <fast_io_dsal/string.h>
 #include <random>
 #include <string>
 #include <thread>
@@ -118,13 +119,15 @@ auto main(int argc, char **argv) -> int
   auto last_start_point{std::chrono::steady_clock::now()};
   while (true) {
     // Render
-    for (auto const &e : state) {
-      for (auto const f : e) {
-        print(fast_io::out(), " ", chvw(f));
+    fast_io::string buffer;
+    for (auto const &line : state) {
+      for (auto const column : line) {
+        buffer.append(" ");
+        buffer.push_back(column);
       }
-      println(fast_io::out(), "");
+      buffer.push_back('\n');
     }
-    println(fast_io::out(), "");
+    println(fast_io::out(), buffer);
 
     // Update
     auto next_cell_live{[&settings](bool on, std::size_t surrounding) {
