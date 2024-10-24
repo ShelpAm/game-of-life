@@ -2,6 +2,7 @@
 #include <fast_io.h>
 #include <fast_io_dsal/span.h>
 #include <fast_io_dsal/string.h>
+#include <fast_io_dsal/string_view.h>
 #include <random>
 #include <string>
 #include <thread>
@@ -48,7 +49,7 @@ auto gen_bool(double p) -> bool
 
 using state_t = std::vector<std::string>;
 
-auto initialize_state(Settings const &s, fast_io::ibuffer_view &ibf) -> state_t
+auto read_state(Settings const &s, fast_io::ibuffer_view &ibf) -> state_t
 {
   state_t state(s.n, std::string(s.m, '.'));
 
@@ -72,6 +73,17 @@ auto initialize_state(Settings const &s, fast_io::ibuffer_view &ibf) -> state_t
   return state;
 }
 
+auto read_config(std::string_view filename) -> std::pair<Settings, state_t>
+{
+  fast_io::native_file_loader file_data{filename};
+  fast_io::ibuffer_view ibf{file_data};
+
+  Settings settings{};
+  scan(ibf, settings);
+
+  return {settings, read_state(settings, ibf)};
+}
+
 auto count_surrounding(state_t const &state, std::size_t x, std::size_t y)
     -> std::size_t
 {
@@ -87,10 +99,39 @@ auto count_surrounding(state_t const &state, std::size_t x, std::size_t y)
   return counter;
 }
 
+void render(state_t const &state)
+{
+  fast_io::string buffer;
+  for (auto const &line : state) {
+    for (auto const column : line) {
+      buffer.append(" ");
+      buffer.push_back(column);
+    }
+    buffer.push_back('\n');
+  }
+  println(fast_io::out(), buffer);
+}
+
+void update(state_t &state, Settings const &s)
+{
+  auto next_cell_live{[&s](bool on, std::size_t surrounding) {
+    return on ? s.on_minimum <= surrounding && surrounding <= s.on_maximum
+              : s.off_minimum <= surrounding && surrounding <= s.off_maximum;
+  }};
+
+  auto next_state{state};
+  for (std::size_t i{}; i != next_state.size(); ++i) {
+    for (std::size_t j{}; j != next_state[i].size(); ++j) {
+      auto const surrounding{count_surrounding(state, i, j)};
+      next_state[i][j] =
+          next_cell_live(state[i][j] == 'o', surrounding) ? 'o' : '.';
+    }
+  }
+  state = std::move(next_state);
+}
+
 auto main(int argc, char **argv) -> int
 {
-  using namespace fast_io::io;
-  using namespace fast_io::mnp;
   using namespace std::chrono_literals;
 
   if (argc == 0) {
@@ -98,54 +139,23 @@ auto main(int argc, char **argv) -> int
   }
 
   if (argc < 2) {
-    println("Usage: ", os_c_str(*argv), " <config-file>");
-    println("");
-    println("Example can be found as state.zzh in project root directory.");
+    fast_io::println("Usage: ", fast_io::mnp::os_c_str(*argv),
+                     " <config-file>");
+    fast_io::println("");
+    fast_io::println("Example config file can be found as state.zzh in project "
+                     "root directory.");
     return 1;
   }
 
   fast_io::span argv_s{argv, static_cast<std::size_t>(argc)};
 
-  char const *const state_filename{argv_s[1]};
-  fast_io::native_file_loader file_data{os_c_str(state_filename)};
-  fast_io::ibuffer_view ibf{file_data};
-
-  Settings settings{};
-  scan(ibf, settings);
-
-  state_t state{initialize_state(settings, ibf)};
+  auto [settings, state]{read_config(argv_s[1])};
 
   auto const wait_time{1000ms / settings.fps};
   auto last_start_point{std::chrono::steady_clock::now()};
   while (true) {
-    // Render
-    fast_io::string buffer;
-    for (auto const &line : state) {
-      for (auto const column : line) {
-        buffer.append(" ");
-        buffer.push_back(column);
-      }
-      buffer.push_back('\n');
-    }
-    println(fast_io::out(), buffer);
-
-    // Update
-    auto next_cell_live{[&settings](bool on, std::size_t surrounding) {
-      return on ? settings.on_minimum <= surrounding &&
-                      surrounding <= settings.on_maximum
-                : settings.off_minimum <= surrounding &&
-                      surrounding <= settings.off_maximum;
-    }};
-
-    auto next_state{state};
-    for (std::size_t i{}; i != next_state.size(); ++i) {
-      for (std::size_t j{}; j != next_state[i].size(); ++j) {
-        auto const surrounding{count_surrounding(state, i, j)};
-        next_state[i][j] =
-            next_cell_live(state[i][j] == 'o', surrounding) ? 'o' : '.';
-      }
-    }
-    state = std::move(next_state);
+    render(state);
+    update(state, settings);
 
     std::this_thread::sleep_until(last_start_point + wait_time);
     last_start_point = std::chrono::steady_clock::now();
