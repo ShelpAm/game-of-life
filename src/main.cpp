@@ -1,4 +1,5 @@
 #include <chrono>
+#include <csignal>
 #include <fast_io.h>
 #include <fast_io_dsal/span.h>
 #include <fast_io_dsal/string.h>
@@ -151,7 +152,7 @@ auto main(int argc, char **argv) -> int
   using namespace std::chrono_literals;
   using fast_io::mnp::chvw;
 
-  signal(SIGINT, signal_handler);
+  std::signal(SIGINT, signal_handler);
 
   if (argc == 0) {
     return 1;
